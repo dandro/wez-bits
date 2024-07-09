@@ -1,9 +1,13 @@
-use std::process::{Command, ExitStatus, Stdio};
+use std::{
+    fs::File,
+    process::{Command, ExitStatus},
+};
 
 use clap::{Parser, ValueEnum};
+use log::info;
 use serde::Deserialize;
 
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, ValueEnum, Debug)]
 enum ProjectileIntegration {
     Build,
     Format,
@@ -33,31 +37,34 @@ struct ProjectileConfig {
     test: Option<ProjectileCommand>,
 }
 
+#[derive(Debug)]
 pub enum AppErr {
     ProjectConfig(String),
     FeatureNotConfigured(String),
     CommandFailed(String),
+    OutputFile(String),
 }
 
 impl ToString for AppErr {
     fn to_string(&self) -> String {
-        let msg = match &self {
-            AppErr::ProjectConfig(msg) => format!("[kind] ProjectConfig [msg]: {} ", msg),
-            AppErr::FeatureNotConfigured(msg) => {
-                format!("[kind] FeatureNotConfigured [msg]: {} ", msg)
-            }
-            AppErr::CommandFailed(msg) => format!("[kind] CommandFailed [msg]: {} ", msg),
-        };
-        format!("[Helix Projectile Error] {} ", msg)
+        format!("{:?}", &self)
     }
 }
 
+fn get_output_file() -> Result<File, AppErr> {
+    let filename = format!(".hx/output.log");
+    info!("Creating output file: {}", filename);
+    File::create(filename).map_err(|e| AppErr::OutputFile(e.to_string()))
+}
+
 fn exec(cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+    let output = get_output_file()?;
+    info!("Executing command: {} {:?}", cmd.program, cmd.args);
     Command::new(cmd.program)
         .args(cmd.args)
-        .stdout(Stdio::inherit())
+        .stderr(output)
         .spawn()
-        .and_then(|child| child.wait_with_output().map(|output| output.status))
+        .and_then(|mut child| child.wait())
         .map_err(|e| AppErr::CommandFailed(e.to_string()))
 }
 
@@ -65,6 +72,10 @@ fn get_cmd(
     helix_projectile: HelixProjectile,
     project_config: ProjectileConfig,
 ) -> Result<ProjectileCommand, AppErr> {
+    info!(
+        "Find command ({:?}) in config file",
+        helix_projectile.integration
+    );
     match helix_projectile.integration {
         ProjectileIntegration::Build => project_config.build.ok_or(err_with("build")),
         ProjectileIntegration::Format => project_config.format.ok_or(err_with("format")),
@@ -78,7 +89,9 @@ fn err_with(feature: &str) -> AppErr {
 }
 
 fn load_config() -> Result<ProjectileConfig, AppErr> {
-    std::fs::read_to_string(".hx/hx-projectile.json")
+    let path = ".hx/hx-projectile.json";
+    info!("Load and parse configuration: {}", path);
+    std::fs::read_to_string(path)
         .map_err(|e| AppErr::ProjectConfig(e.to_string()))
         .and_then(|config| {
             serde_json::from_str::<ProjectileConfig>(&config)
