@@ -17,6 +17,31 @@ enum ProjectileIntegration {
 
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
+#[command(name = "Helix Projectile")]
+#[command(version = "0.1.1")]
+#[command(about = "
+ ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
+▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
+▒██▀▀██░▒███   ▒██░    ▒██▒░░  █   ░                                            
+░▓█ ░██ ▒▓█  ▄ ▒██░    ░██░ ░ █ █ ▒                                             
+░▓█▒░██▓░▒████▒░██████▒░██░▒██▒ ▒██▒                                            
+ ▒ ░░▒░▒░░ ▒░ ░░ ▒░▓  ░░▓  ▒▒ ░ ░▓ ░                                            
+ ▒ ░▒░ ░ ░ ░  ░░ ░ ▒  ░ ▒ ░░░   ░▒ ░                                            
+ ░  ░░ ░   ░     ░ ░    ▒ ░ ░    ░                                              
+ ░  ░  ░   ░  ░    ░  ░ ░   ░    ░                                              
+                                                                                
+ ██▓███   ██▀███   ▒█████   ▄▄▄██▀▀▀▓█████  ▄████▄  ▄▄▄█████▓ ██▓ ██▓    ▓█████ 
+▓██░  ██▒▓██ ▒ ██▒▒██▒  ██▒   ▒██   ▓█   ▀ ▒██▀ ▀█  ▓  ██▒ ▓▒▓██▒▓██▒    ▓█   ▀ 
+▓██░ ██▓▒▓██ ░▄█ ▒▒██░  ██▒   ░██   ▒███   ▒▓█    ▄ ▒ ▓██░ ▒░▒██▒▒██░    ▒███   
+▒██▄█▓▒ ▒▒██▀▀█▄  ▒██   ██░▓██▄██▓  ▒▓█  ▄ ▒▓▓▄ ▄██▒░ ▓██▓ ░ ░██░▒██░    ▒▓█  ▄ 
+▒██▒ ░  ░░██▓ ▒██▒░ ████▓▒░ ▓███▒   ░▒████▒▒ ▓███▀ ░  ▒██▒ ░ ░██░░██████▒░▒████▒
+▒▓▒░ ░  ░░ ▒▓ ░▒▓░░ ▒░▒░▒░  ▒▓▒▒░   ░░ ▒░ ░░ ░▒ ▒  ░  ▒ ░░   ░▓  ░ ▒░▓  ░░░ ▒░ ░
+░▒ ░       ░▒ ░ ▒░  ░ ▒ ▒░  ▒ ░▒░    ░ ░  ░  ░  ▒       ░     ▒ ░░ ░ ▒  ░ ░ ░  ░
+░░         ░░   ░ ░ ░ ░ ▒   ░ ░ ░      ░   ░          ░       ▒ ░  ░ ░      ░   
+            ░         ░ ░   ░   ░      ░  ░░ ░                ░      ░  ░   ░  ░
+                                           ░                                    
+
+Project Scoped Interactivity", long_about = None)]
 struct HelixProjectile {
     /// Integration Feature
     #[arg(value_enum, short, long)]
@@ -51,18 +76,29 @@ impl ToString for AppErr {
     }
 }
 
-fn get_output_file() -> Result<File, AppErr> {
-    let filename = format!(".hx/output.log");
+enum FilePurpose {
+    Stdout,
+    Stderr,
+}
+
+fn get_output_file(purpose: FilePurpose) -> Result<File, AppErr> {
+    let name = match purpose {
+        FilePurpose::Stdout => "output",
+        FilePurpose::Stderr => "errors",
+    };
+    let filename = format!(".hx/{}.log", name);
     info!("Creating output file: {}", filename);
     File::create(filename).map_err(|e| AppErr::OutputFile(e.to_string()))
 }
 
 fn exec(cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
-    let output = get_output_file()?;
+    let output = get_output_file(FilePurpose::Stdout)?;
+    let error = get_output_file(FilePurpose::Stderr)?;
     info!("Executing command: {} {:?}", cmd.program, cmd.args);
     Command::new(cmd.program)
         .args(cmd.args)
-        .stderr(output)
+        .stderr(error)
+        .stdout(output)
         .spawn()
         .and_then(|mut child| child.wait())
         .map_err(|e| AppErr::CommandFailed(e.to_string()))
@@ -100,8 +136,8 @@ fn load_config() -> Result<ProjectileConfig, AppErr> {
 }
 
 pub fn run_app() -> Result<ExitStatus, AppErr> {
-    let project_config = load_config()?;
     let helix_projectile = HelixProjectile::parse();
+    let project_config = load_config()?;
     let cmd = get_cmd(helix_projectile, project_config)?;
 
     exec(cmd)
