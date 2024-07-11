@@ -1,11 +1,18 @@
 use std::{
     fs::File,
     process::{Command, ExitStatus},
+    thread,
+    time::Duration,
 };
 
 use clap::{Parser, ValueEnum};
 use log::info;
 use serde::Deserialize;
+
+use crate::{
+    domain::AppErr,
+    wezterm::{close_pane, display_logs_in_pane, get_or_open, Direction},
+};
 
 #[derive(Clone, ValueEnum, Debug)]
 enum ProjectileIntegration {
@@ -18,7 +25,7 @@ enum ProjectileIntegration {
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
 #[command(name = "Helix Projectile")]
-#[command(version = "0.1.1")]
+#[command(version = "0.2.0")]
 #[command(about = "
  ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
 ▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
@@ -62,20 +69,6 @@ struct ProjectileConfig {
     test: Option<ProjectileCommand>,
 }
 
-#[derive(Debug)]
-pub enum AppErr {
-    ProjectConfig(String),
-    FeatureNotConfigured(String),
-    CommandFailed(String),
-    OutputFile(String),
-}
-
-impl ToString for AppErr {
-    fn to_string(&self) -> String {
-        format!("{:?}", &self)
-    }
-}
-
 enum FilePurpose {
     Stdout,
     Stderr,
@@ -94,14 +87,23 @@ fn get_output_file(purpose: FilePurpose) -> Result<File, AppErr> {
 fn exec(cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
     let output = get_output_file(FilePurpose::Stdout)?;
     let error = get_output_file(FilePurpose::Stderr)?;
+
+    let mini_buffer_id = get_or_open(Direction::Right)?;
+    let _ = display_logs_in_pane(&mini_buffer_id)?;
+
     info!("Executing command: {} {:?}", cmd.program, cmd.args);
-    Command::new(cmd.program)
+    let exit_status = Command::new(cmd.program)
         .args(cmd.args)
         .stderr(error)
         .stdout(output)
         .spawn()
         .and_then(|mut child| child.wait())
-        .map_err(|e| AppErr::CommandFailed(e.to_string()))
+        .map_err(|e| AppErr::CommandFailed(e.to_string()))?;
+
+    thread::sleep(Duration::from_secs(3));
+    let _ = close_pane(&mini_buffer_id);
+
+    Ok(exit_status)
 }
 
 fn get_cmd(

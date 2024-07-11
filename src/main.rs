@@ -3,6 +3,8 @@ use log::{error, info};
 use pretty_env_logger::init_timed;
 
 mod app;
+mod domain;
+mod wezterm;
 
 fn main() {
     init_timed();
