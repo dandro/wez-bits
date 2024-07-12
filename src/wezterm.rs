@@ -23,10 +23,16 @@ impl ToString for Direction {
     }
 }
 
-pub fn get_or_open(direction: Direction) -> Result<String, AppErr> {
+pub fn open_pane(direction: Direction) -> Result<String, AppErr> {
     info!("Get or open wezterm panel: {}", direction.to_string());
+    let args = match direction {
+        Direction::Right | Direction::Left => {
+            vec!["cli", "split-pane", "--horizaontal", "--percent", "30"]
+        }
+        Direction::Up | Direction::Down => vec!["cli", "split-pane", "--percent", "15"],
+    };
     Command::new("wezterm")
-        .args(vec!["cli", "get-pane-direction", &direction.to_string()])
+        .args(args)
         .output()
         .map_err(|e| AppErr::CommandFailed(e.to_string()))
         .and_then(|o| {

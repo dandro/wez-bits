@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::{
     domain::AppErr,
-    wezterm::{close_pane, display_logs_in_pane, get_or_open, Direction},
+    wezterm::{close_pane, display_logs_in_pane, open_pane, Direction},
 };
 
 #[derive(Clone, ValueEnum, Debug)]
@@ -88,7 +88,7 @@ fn exec(cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
     let output = get_output_file(FilePurpose::Stdout)?;
     let error = get_output_file(FilePurpose::Stderr)?;
 
-    let mini_buffer_id = get_or_open(Direction::Right)?;
+    let mini_buffer_id = open_pane(Direction::Down)?;
     let _ = display_logs_in_pane(&mini_buffer_id)?;
 
     info!("Executing command: {} {:?}", cmd.program, cmd.args);
