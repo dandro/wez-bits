@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 
 use log::info;
 
@@ -27,7 +27,7 @@ pub fn open_pane(direction: Direction) -> Result<String, AppErr> {
     info!("Get or open wezterm panel: {}", direction.to_string());
     let args = match direction {
         Direction::Right | Direction::Left => {
-            vec!["cli", "split-pane", "--horizaontal", "--percent", "30"]
+            vec!["cli", "split-pane", "--horizontal", "--percent", "30"]
         }
         Direction::Up | Direction::Down => vec!["cli", "split-pane", "--percent", "15"],
     };
@@ -74,5 +74,22 @@ pub fn close_pane(pane_id: &str) -> Result<(), AppErr> {
         .args(&["cli", "kill-pane", "--pane-id", pane_id])
         .output()
         .map(|_| ())
+        .map_err(|e| AppErr::CommandFailed(e.to_string()))
+}
+
+pub fn pipe_stdout_to_pane(args: Vec<String>, pane_id: String) -> Result<ExitStatus, AppErr> {
+    let project_task = Command::new("echo")
+        .args(args)
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| AppErr::CommandFailed(e.to_string()))?;
+
+    Command::new("wezterm")
+        .args(&["cli", "send-text", "--pane-id", &pane_id, "--no-paste"])
+        .stdin(Stdio::from(project_task.stdout.unwrap()))
+        .stdout(Stdio::inherit())
+        .spawn()
+        .and_then(|c| c.wait_with_output())
+        .map(|output| output.status)
         .map_err(|e| AppErr::CommandFailed(e.to_string()))
 }

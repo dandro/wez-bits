@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    process::{Command, ExitStatus},
+    process::{Command, ExitStatus, Stdio},
     thread,
     time::Duration,
 };
@@ -11,7 +11,7 @@ use serde::Deserialize;
 
 use crate::{
     domain::AppErr,
-    wezterm::{close_pane, display_logs_in_pane, open_pane, Direction},
+    wezterm::{close_pane, display_logs_in_pane, open_pane, pipe_stdout_to_pane, Direction},
 };
 
 #[derive(Clone, ValueEnum, Debug)]
@@ -25,7 +25,7 @@ enum ProjectileIntegration {
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
 #[command(name = "Helix Projectile")]
-#[command(version = "0.2.0")]
+#[command(version = "0.3.4")]
 #[command(about = "
  ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
 ▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
@@ -56,17 +56,17 @@ struct HelixProjectile {
 }
 
 #[derive(Deserialize)]
-struct ProjectileCommand {
+struct ConfigCommand {
     program: String,
     args: Vec<String>,
 }
 
 #[derive(Deserialize)]
 struct ProjectileConfig {
-    build: Option<ProjectileCommand>,
-    format: Option<ProjectileCommand>,
-    run: Option<ProjectileCommand>,
-    test: Option<ProjectileCommand>,
+    build: Option<ConfigCommand>,
+    format: Option<ConfigCommand>,
+    run: Option<ConfigCommand>,
+    test: Option<ConfigCommand>,
 }
 
 enum FilePurpose {
@@ -84,16 +84,45 @@ fn get_output_file(purpose: FilePurpose) -> Result<File, AppErr> {
     File::create(filename).map_err(|e| AppErr::OutputFile(e.to_string()))
 }
 
-fn exec(cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+fn exec(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+    let exit_status = if projectile_cmd.settings.interactive {
+        interactive_cmd(projectile_cmd)?
+    } else {
+        non_interactive_cmd(projectile_cmd)?
+    };
+
+    Ok(exit_status)
+}
+
+fn interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+    info!(
+        "Executing interactive command: {} {:?}",
+        projectile_cmd.cmd.program, projectile_cmd.cmd.args
+    );
+
+    let pane_id = open_pane(Direction::Right)?;
+
+    pipe_stdout_to_pane(
+        [
+            &[projectile_cmd.cmd.program],
+            projectile_cmd.cmd.args.as_slice(),
+        ]
+        .concat(),
+        pane_id,
+    )
+}
+
+fn non_interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
     let output = get_output_file(FilePurpose::Stdout)?;
     let error = get_output_file(FilePurpose::Stderr)?;
-
     let mini_buffer_id = open_pane(Direction::Down)?;
     let _ = display_logs_in_pane(&mini_buffer_id)?;
-
-    info!("Executing command: {} {:?}", cmd.program, cmd.args);
-    let exit_status = Command::new(cmd.program)
-        .args(cmd.args)
+    info!(
+        "Executing command: {} {:?}",
+        projectile_cmd.cmd.program, projectile_cmd.cmd.args
+    );
+    let exit_status = Command::new(projectile_cmd.cmd.program)
+        .args(projectile_cmd.cmd.args)
         .stderr(error)
         .stdout(output)
         .spawn()
@@ -106,6 +135,15 @@ fn exec(cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
     Ok(exit_status)
 }
 
+struct CommandSettings {
+    interactive: bool,
+}
+
+struct ProjectileCommand {
+    cmd: ConfigCommand,
+    settings: CommandSettings,
+}
+
 fn get_cmd(
     helix_projectile: HelixProjectile,
     project_config: ProjectileConfig,
@@ -115,10 +153,34 @@ fn get_cmd(
         helix_projectile.integration
     );
     match helix_projectile.integration {
-        ProjectileIntegration::Build => project_config.build.ok_or(err_with("build")),
-        ProjectileIntegration::Format => project_config.format.ok_or(err_with("format")),
-        ProjectileIntegration::Run => project_config.run.ok_or(err_with("run")),
-        ProjectileIntegration::Test => project_config.test.ok_or(err_with("test")),
+        ProjectileIntegration::Build => project_config
+            .build
+            .map(|cmd| ProjectileCommand {
+                cmd,
+                settings: CommandSettings { interactive: false },
+            })
+            .ok_or(err_with("build")),
+        ProjectileIntegration::Format => project_config
+            .format
+            .map(|cmd| ProjectileCommand {
+                cmd,
+                settings: CommandSettings { interactive: false },
+            })
+            .ok_or(err_with("format")),
+        ProjectileIntegration::Run => project_config
+            .run
+            .map(|cmd| ProjectileCommand {
+                cmd,
+                settings: CommandSettings { interactive: true },
+            })
+            .ok_or(err_with("run")),
+        ProjectileIntegration::Test => project_config
+            .test
+            .map(|cmd| ProjectileCommand {
+                cmd,
+                settings: CommandSettings { interactive: false },
+            })
+            .ok_or(err_with("test")),
     }
 }
 
