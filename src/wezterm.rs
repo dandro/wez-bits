@@ -2,9 +2,13 @@ use std::process::{Command, ExitStatus, Stdio};
 
 use log::info;
 
-use crate::domain::AppErr;
+use crate::{
+    constants::{DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME},
+    domain::AppErr,
+};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Direction {
     Right,
     Left,
@@ -54,8 +58,11 @@ pub fn open_pane(direction: Direction) -> Result<String, AppErr> {
 
 pub fn display_logs_in_pane(pane_id: &str) -> Result<(), AppErr> {
     info!("Displaying logs in pane with id {}", pane_id);
+    let error_file = format!("{}/{}", DOTDIR, ERROR_FILENAME);
+    let output_file = format!("{}/{}", DOTDIR, OUTPUT_FILENAME);
+    let arg = format!("tail -f -n 20 {} {}", error_file, output_file);
     let echo_cmd = Command::new("echo")
-        .arg("tail -f -n 20 .hx/output.log .hx/errors.log")
+        .arg(arg)
         .stdout(Stdio::piped())
         .spawn()
         .map_err(|e| AppErr::CommandFailed(e.to_string()))?;

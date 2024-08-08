@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    process::{Command, ExitStatus, Stdio},
+    process::{Command, ExitStatus},
     thread,
     time::Duration,
 };
@@ -10,6 +10,7 @@ use log::info;
 use serde::Deserialize;
 
 use crate::{
+    constants::{CONFIG_FILE, DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME},
     domain::AppErr,
     wezterm::{close_pane, display_logs_in_pane, open_pane, pipe_stdout_to_pane, Direction},
 };
@@ -25,7 +26,7 @@ enum ProjectileIntegration {
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
 #[command(name = "Helix Projectile")]
-#[command(version = "0.3.4")]
+#[command(version = "0.4.1")]
 #[command(about = "
  ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
 ▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
@@ -76,10 +77,10 @@ enum FilePurpose {
 
 fn get_output_file(purpose: FilePurpose) -> Result<File, AppErr> {
     let name = match purpose {
-        FilePurpose::Stdout => "output",
-        FilePurpose::Stderr => "errors",
+        FilePurpose::Stdout => OUTPUT_FILENAME,
+        FilePurpose::Stderr => ERROR_FILENAME,
     };
-    let filename = format!(".hx/{}.log", name);
+    let filename = format!("{}/{}", DOTDIR, name);
     info!("Creating output file: {}", filename);
     File::create(filename).map_err(|e| AppErr::OutputFile(e.to_string()))
 }
@@ -129,7 +130,7 @@ fn non_interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, 
         .and_then(|mut child| child.wait())
         .map_err(|e| AppErr::CommandFailed(e.to_string()))?;
 
-    thread::sleep(Duration::from_secs(3));
+    thread::sleep(Duration::from_secs(5));
     let _ = close_pane(&mini_buffer_id);
 
     Ok(exit_status)
@@ -189,7 +190,7 @@ fn err_with(feature: &str) -> AppErr {
 }
 
 fn load_config() -> Result<ProjectileConfig, AppErr> {
-    let path = ".hx/hx-projectile.json";
+    let path = format!("{}/{}", DOTDIR, CONFIG_FILE);
     info!("Load and parse configuration: {}", path);
     std::fs::read_to_string(path)
         .map_err(|e| AppErr::ProjectConfig(e.to_string()))
