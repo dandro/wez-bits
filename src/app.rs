@@ -26,7 +26,7 @@ enum ProjectileIntegration {
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
 #[command(name = "Helix Projectile")]
-#[command(version = "0.4.1")]
+#[command(version = "0.5.0")]
 #[command(about = "
  ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
 ▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
@@ -179,7 +179,7 @@ fn get_cmd(
             .test
             .map(|cmd| ProjectileCommand {
                 cmd,
-                settings: CommandSettings { interactive: false },
+                settings: CommandSettings { interactive: true },
             })
             .ok_or(err_with("test")),
     }

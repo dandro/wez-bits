@@ -14,7 +14,7 @@ Download repository and use cargo to install the tool. `cargo install --path .`
 
 ## Configuration
 
-Create a `.hx/hx-projectile.json` file in the project you are trying to integrate. The JSON file should follow the structure below:
+Create a `.helix/projectile.json` file in the project you are trying to integrate. The JSON file should follow the structure below:
 
 ``` jsonc
 {
