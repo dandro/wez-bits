@@ -27,11 +27,12 @@ impl ToString for Direction {
     }
 }
 
-pub fn open_pane(direction: Direction) -> Result<String, AppErr> {
+pub fn open_pane(direction: Direction, size: i32) -> Result<String, AppErr> {
     info!("Get or open wezterm panel: {}", direction.to_string());
+    let pane_size = size.to_string();
     let args = match direction {
         Direction::Right | Direction::Left => {
-            vec!["cli", "split-pane", "--horizontal", "--percent", "30"]
+            vec!["cli", "split-pane", "--horizontal", "--percent", &pane_size]
         }
         Direction::Up | Direction::Down => vec!["cli", "split-pane", "--percent", "15"],
     };
@@ -60,7 +61,10 @@ pub fn display_logs_in_pane(pane_id: &str) -> Result<(), AppErr> {
     info!("Displaying logs in pane with id {}", pane_id);
     let error_file = format!("{}/{}", DOTDIR, ERROR_FILENAME);
     let output_file = format!("{}/{}", DOTDIR, OUTPUT_FILENAME);
-    let arg = format!("tail -f -n 20 {} {}", error_file, output_file);
+    let arg = format!(
+        "tail -f -n 20 {} {} | bat --paging=never -l log",
+        error_file, output_file
+    );
     let echo_cmd = Command::new("echo")
         .arg(arg)
         .stdout(Stdio::piped())

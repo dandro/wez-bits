@@ -1,17 +1,19 @@
 use std::{
+    collections::HashMap,
     fs::File,
     process::{Command, ExitStatus},
     thread,
     time::Duration,
 };
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use log::info;
 use serde::Deserialize;
 
 use crate::{
     constants::{CONFIG_FILE, DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME},
     domain::AppErr,
+    project_picker,
     wezterm::{close_pane, display_logs_in_pane, open_pane, pipe_stdout_to_pane, Direction},
 };
 
@@ -26,7 +28,7 @@ enum ProjectileIntegration {
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
 #[command(name = "Helix Projectile")]
-#[command(version = "0.5.0")]
+#[command(version = "0.6.0-rc7")]
 #[command(about = "
  ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
 ▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
@@ -49,26 +51,35 @@ enum ProjectileIntegration {
             ░         ░ ░   ░   ░      ░  ░░ ░                ░      ░  ░   ░  ░
                                            ░                                    
 
-Project Scoped Interactivity", long_about = None)]
+Project Utils for Helix", long_about = None)]
 struct HelixProjectile {
-    /// Integration Feature
-    #[arg(value_enum, short, long)]
-    integration: ProjectileIntegration,
+    #[command(subcommand)]
+    cmd: ProjectileSubCmd,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Subcommand)]
+enum ProjectileSubCmd {
+    /// Launch project picker and open a new helix IDE instance
+    ProjectPicker { cwd: String },
+
+    /// Run a project scoped task
+    TaskRunner {
+        /// Task name in config file
+        name: String,
+
+        /// When true, a wezterm pane will be opened and be left opened; otherwise, it will be closed when the task is completed.
+        #[arg(short, long)]
+        interactive: bool,
+    },
+}
+
+#[derive(Deserialize, Clone)]
 struct ConfigCommand {
     program: String,
     args: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct ProjectileConfig {
-    build: Option<ConfigCommand>,
-    format: Option<ConfigCommand>,
-    run: Option<ConfigCommand>,
-    test: Option<ConfigCommand>,
-}
+type TasksConfig = HashMap<String, ConfigCommand>;
 
 enum FilePurpose {
     Stdout,
@@ -85,7 +96,7 @@ fn get_output_file(purpose: FilePurpose) -> Result<File, AppErr> {
     File::create(filename).map_err(|e| AppErr::OutputFile(e.to_string()))
 }
 
-fn exec(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+fn exec(projectile_cmd: ProjectileTask) -> Result<ExitStatus, AppErr> {
     let exit_status = if projectile_cmd.settings.interactive {
         interactive_cmd(projectile_cmd)?
     } else {
@@ -95,13 +106,13 @@ fn exec(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
     Ok(exit_status)
 }
 
-fn interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+fn interactive_cmd(projectile_cmd: ProjectileTask) -> Result<ExitStatus, AppErr> {
     info!(
         "Executing interactive command: {} {:?}",
         projectile_cmd.cmd.program, projectile_cmd.cmd.args
     );
 
-    let pane_id = open_pane(Direction::Right)?;
+    let pane_id = open_pane(Direction::Right, 30)?;
 
     pipe_stdout_to_pane(
         [
@@ -113,10 +124,10 @@ fn interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppE
     )
 }
 
-fn non_interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, AppErr> {
+fn non_interactive_cmd(projectile_cmd: ProjectileTask) -> Result<ExitStatus, AppErr> {
     let output = get_output_file(FilePurpose::Stdout)?;
     let error = get_output_file(FilePurpose::Stderr)?;
-    let mini_buffer_id = open_pane(Direction::Down)?;
+    let mini_buffer_id = open_pane(Direction::Down, 30)?;
     let _ = display_logs_in_pane(&mini_buffer_id)?;
     info!(
         "Executing command: {} {:?}",
@@ -130,8 +141,10 @@ fn non_interactive_cmd(projectile_cmd: ProjectileCommand) -> Result<ExitStatus, 
         .and_then(|mut child| child.wait())
         .map_err(|e| AppErr::CommandFailed(e.to_string()))?;
 
-    thread::sleep(Duration::from_secs(5));
-    let _ = close_pane(&mini_buffer_id);
+    if exit_status.success() {
+        thread::sleep(Duration::from_secs(5));
+        let _ = close_pane(&mini_buffer_id);
+    }
 
     Ok(exit_status)
 }
@@ -140,70 +153,55 @@ struct CommandSettings {
     interactive: bool,
 }
 
-struct ProjectileCommand {
+struct ProjectileTask {
     cmd: ConfigCommand,
     settings: CommandSettings,
 }
 
-fn get_cmd(
-    helix_projectile: HelixProjectile,
-    project_config: ProjectileConfig,
-) -> Result<ProjectileCommand, AppErr> {
-    info!(
-        "Find command ({:?}) in config file",
-        helix_projectile.integration
-    );
-    match helix_projectile.integration {
-        ProjectileIntegration::Build => project_config
-            .build
-            .map(|cmd| ProjectileCommand {
-                cmd,
-                settings: CommandSettings { interactive: false },
-            })
-            .ok_or(err_with("build")),
-        ProjectileIntegration::Format => project_config
-            .format
-            .map(|cmd| ProjectileCommand {
-                cmd,
-                settings: CommandSettings { interactive: false },
-            })
-            .ok_or(err_with("format")),
-        ProjectileIntegration::Run => project_config
-            .run
-            .map(|cmd| ProjectileCommand {
-                cmd,
-                settings: CommandSettings { interactive: true },
-            })
-            .ok_or(err_with("run")),
-        ProjectileIntegration::Test => project_config
-            .test
-            .map(|cmd| ProjectileCommand {
-                cmd,
-                settings: CommandSettings { interactive: true },
-            })
-            .ok_or(err_with("test")),
+fn handle_command(helix_projectile: HelixProjectile) -> Result<ExitStatus, AppErr> {
+    info!("Matching projectile command");
+    match helix_projectile.cmd {
+        ProjectileSubCmd::ProjectPicker { cwd: _ } => project_picker::init()
+            .map_err(|_| AppErr::CommandFailed("project picker failed".to_string())),
+        ProjectileSubCmd::TaskRunner { name, interactive } => {
+            info!("Command: TaskRunner");
+            info!("Find command ({:?}) in config file", name);
+            let tasks_config = load_tasks_config()?;
+            let cmd = handle_task_runner(name, interactive, tasks_config)?;
+            exec(cmd)
+        }
     }
 }
 
-fn err_with(feature: &str) -> AppErr {
-    AppErr::FeatureNotConfigured(format!("Project {} feature not configured", feature))
+fn handle_task_runner(
+    name: String,
+    interactive: bool,
+    tasks_config: TasksConfig,
+) -> Result<ProjectileTask, AppErr> {
+    match tasks_config.get(&name) {
+        Some(cmd) => Ok(ProjectileTask {
+            cmd: cmd.clone(),
+            settings: CommandSettings { interactive },
+        }),
+        None => Err(AppErr::FeatureNotConfigured(format!(
+            "Project {} feature not configured",
+            &name
+        ))),
+    }
 }
 
-fn load_config() -> Result<ProjectileConfig, AppErr> {
+fn load_tasks_config() -> Result<TasksConfig, AppErr> {
     let path = format!("{}/{}", DOTDIR, CONFIG_FILE);
     info!("Load and parse configuration: {}", path);
     std::fs::read_to_string(path)
         .map_err(|e| AppErr::ProjectConfig(e.to_string()))
         .and_then(|config| {
-            serde_json::from_str::<ProjectileConfig>(&config)
+            serde_json::from_str::<TasksConfig>(&config)
                 .map_err(|e| AppErr::ProjectConfig(e.to_string()))
         })
 }
 
 pub fn run_app() -> Result<ExitStatus, AppErr> {
     let helix_projectile = HelixProjectile::parse();
-    let project_config = load_config()?;
-    let cmd = get_cmd(helix_projectile, project_config)?;
-
-    exec(cmd)
+    handle_command(helix_projectile)
 }

@@ -1,4 +1,7 @@
+use std::fmt::Display;
+
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum AppErr {
     ProjectConfig(String),
     FeatureNotConfigured(String),
@@ -6,8 +9,8 @@ pub enum AppErr {
     OutputFile(String),
 }
 
-impl ToString for AppErr {
-    fn to_string(&self) -> String {
-        format!("{:?}", &self)
+impl Display for AppErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self)
     }
 }

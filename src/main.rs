@@ -5,6 +5,7 @@ use pretty_env_logger::init_timed;
 mod app;
 mod constants;
 mod domain;
+pub mod project_picker;
 mod wezterm;
 
 fn main() {
