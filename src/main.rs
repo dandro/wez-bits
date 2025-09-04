@@ -3,9 +3,10 @@ use log::{error, info};
 use pretty_env_logger::init_timed;
 
 mod app;
+mod config;
 mod constants;
 mod domain;
-pub mod project_picker;
+mod project_picker;
 mod wezterm;
 
 fn main() {

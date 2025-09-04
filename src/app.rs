@@ -8,11 +8,11 @@ use std::{
 
 use clap::{Parser, Subcommand, ValueEnum};
 use log::info;
-use serde::Deserialize;
 
 use crate::{
+    config,
     constants::{CONFIG_FILE, DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME},
-    domain::AppErr,
+    domain::{AppErr, CommandSettings, ConfigCommand, ProjectileTask},
     project_picker,
     wezterm::{close_pane, display_logs_in_pane, open_pane, pipe_stdout_to_pane, Direction},
 };
@@ -28,7 +28,7 @@ enum ProjectileIntegration {
 /// Helix Projectile - Project Scoped Interactivity
 #[derive(Parser)]
 #[command(name = "Helix Projectile")]
-#[command(version = "0.6.0-rc7")]
+#[command(version = "0.6.0-rc12")]
 #[command(about = "
  ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
 ▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
@@ -71,12 +71,8 @@ enum ProjectileSubCmd {
         #[arg(short, long)]
         interactive: bool,
     },
-}
-
-#[derive(Deserialize, Clone)]
-struct ConfigCommand {
-    program: String,
-    args: Vec<String>,
+    /// Interact with helix projectile configuration
+    CreateConfig {},
 }
 
 type TasksConfig = HashMap<String, ConfigCommand>;
@@ -149,15 +145,6 @@ fn non_interactive_cmd(projectile_cmd: ProjectileTask) -> Result<ExitStatus, App
     Ok(exit_status)
 }
 
-struct CommandSettings {
-    interactive: bool,
-}
-
-struct ProjectileTask {
-    cmd: ConfigCommand,
-    settings: CommandSettings,
-}
-
 fn handle_command(helix_projectile: HelixProjectile) -> Result<ExitStatus, AppErr> {
     info!("Matching projectile command");
     match helix_projectile.cmd {
@@ -169,6 +156,10 @@ fn handle_command(helix_projectile: HelixProjectile) -> Result<ExitStatus, AppEr
             let tasks_config = load_tasks_config()?;
             let cmd = handle_task_runner(name, interactive, tasks_config)?;
             exec(cmd)
+        }
+        ProjectileSubCmd::CreateConfig {} => {
+            info!("Command: Create Config");
+            config::create()
         }
     }
 }
@@ -191,7 +182,7 @@ fn handle_task_runner(
 }
 
 fn load_tasks_config() -> Result<TasksConfig, AppErr> {
-    let path = format!("{}/{}", DOTDIR, CONFIG_FILE);
+    let path = format!("{DOTDIR}/{CONFIG_FILE}");
     info!("Load and parse configuration: {}", path);
     std::fs::read_to_string(path)
         .map_err(|e| AppErr::ProjectConfig(e.to_string()))

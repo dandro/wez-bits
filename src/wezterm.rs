@@ -34,7 +34,7 @@ pub fn open_pane(direction: Direction, size: i32) -> Result<String, AppErr> {
         Direction::Right | Direction::Left => {
             vec!["cli", "split-pane", "--horizontal", "--percent", &pane_size]
         }
-        Direction::Up | Direction::Down => vec!["cli", "split-pane", "--percent", "15"],
+        Direction::Up | Direction::Down => vec!["cli", "split-pane", "--percent", "30"],
     };
     Command::new("wezterm")
         .args(args)
