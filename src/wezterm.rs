@@ -1,4 +1,7 @@
-use std::process::{Command, ExitStatus, Stdio};
+use std::{
+    fmt::Display,
+    process::{Command, ExitStatus, Stdio},
+};
 
 use log::info;
 
@@ -16,13 +19,13 @@ pub enum Direction {
     Down,
 }
 
-impl ToString for Direction {
-    fn to_string(&self) -> String {
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            Direction::Right => String::from("right"),
-            Direction::Left => String::from("left"),
-            Direction::Up => String::from("up"),
-            Direction::Down => String::from("down"),
+            Direction::Right => write!(f, "right"),
+            Direction::Left => write!(f, "left"),
+            Direction::Up => write!(f, "up"),
+            Direction::Down => write!(f, "down"),
         }
     }
 }
@@ -47,8 +50,7 @@ pub fn open_pane(direction: Direction, size: i32) -> Result<String, AppErr> {
                     let pane_id = id.trim();
                     if pane_id.is_empty() {
                         Err(AppErr::CommandFailed(format!(
-                            "There is not pane {:?}",
-                            direction
+                            "There is not pane {direction}",
                         )))
                     } else {
                         Ok(pane_id.to_string())
@@ -59,12 +61,9 @@ pub fn open_pane(direction: Direction, size: i32) -> Result<String, AppErr> {
 
 pub fn display_logs_in_pane(pane_id: &str) -> Result<(), AppErr> {
     info!("Displaying logs in pane with id {}", pane_id);
-    let error_file = format!("{}/{}", DOTDIR, ERROR_FILENAME);
-    let output_file = format!("{}/{}", DOTDIR, OUTPUT_FILENAME);
-    let arg = format!(
-        "tail -f -n 20 {} {} | bat --paging=never -l log",
-        error_file, output_file
-    );
+    let error_file = format!("{DOTDIR}/{ERROR_FILENAME}");
+    let output_file = format!("{DOTDIR}/{OUTPUT_FILENAME}");
+    let arg = format!("tail -f -n 20 {error_file} {output_file} | bat --paging=never -l log",);
     let echo_cmd = Command::new("echo")
         .arg(arg)
         .stdout(Stdio::piped())
@@ -72,7 +71,7 @@ pub fn display_logs_in_pane(pane_id: &str) -> Result<(), AppErr> {
         .map_err(|e| AppErr::CommandFailed(e.to_string()))?;
 
     Command::new("wezterm")
-        .args(&["cli", "send-text", "--pane-id", pane_id, "--no-paste"])
+        .args(["cli", "send-text", "--pane-id", pane_id, "--no-paste"])
         .stdin(Stdio::from(echo_cmd.stdout.unwrap()))
         .stdout(Stdio::inherit())
         .spawn()
@@ -82,7 +81,7 @@ pub fn display_logs_in_pane(pane_id: &str) -> Result<(), AppErr> {
 
 pub fn close_pane(pane_id: &str) -> Result<(), AppErr> {
     Command::new("wezterm")
-        .args(&["cli", "kill-pane", "--pane-id", pane_id])
+        .args(["cli", "kill-pane", "--pane-id", pane_id])
         .output()
         .map(|_| ())
         .map_err(|e| AppErr::CommandFailed(e.to_string()))
@@ -96,7 +95,7 @@ pub fn pipe_stdout_to_pane(args: Vec<String>, pane_id: String) -> Result<ExitSta
         .map_err(|e| AppErr::CommandFailed(e.to_string()))?;
 
     Command::new("wezterm")
-        .args(&["cli", "send-text", "--pane-id", &pane_id, "--no-paste"])
+        .args(["cli", "send-text", "--pane-id", &pane_id, "--no-paste"])
         .stdin(Stdio::from(project_task.stdout.unwrap()))
         .stdout(Stdio::inherit())
         .spawn()

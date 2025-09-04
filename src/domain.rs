@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use serde::Deserialize;
 
@@ -32,3 +32,5 @@ pub struct ProjectileTask {
     pub cmd: ConfigCommand,
     pub settings: CommandSettings,
 }
+
+pub type TasksConfig = HashMap<String, ConfigCommand>;

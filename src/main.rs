@@ -6,15 +6,13 @@ mod app;
 mod config;
 mod constants;
 mod domain;
-mod project_picker;
 mod wezterm;
 
 fn main() {
     init_timed();
     info!("Helix Projectile");
 
-    match run_app() {
-        Err(err) => error!("Helix Projectile Failed: {}", &err.to_string()),
-        Ok(_) => (),
+    if let Err(err) = run_app() {
+        error!("Helix Projectile Failed: {}", &err.to_string())
     }
 }
