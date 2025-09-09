@@ -5,6 +5,7 @@ mod adapters;
 mod application;
 mod constants;
 mod domain;
+mod errors;
 mod ports;
 
 use application::Application;
@@ -14,6 +15,8 @@ fn main() {
     info!("Wez Bits");
 
     if let Err(err) = Application::run() {
-        error!("Wez Bits Failed: {}", &err.to_string())
+        // Use anyhow's error display format with context ({:#})
+        error!("Wez Bits Failed: {:#}", &err);
+        std::process::exit(1);
     }
 }

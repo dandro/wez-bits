@@ -1,11 +1,11 @@
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::info;
 
 use crate::domain::behaviours::TaskExecutionService;
-use crate::domain::models::AppError;
 use crate::ports::{ConfigPort, TaskExecutionPort, TerminalPort};
 
 /// Application CLI command structure
@@ -56,12 +56,12 @@ impl<C: ConfigPort, T: TaskExecutionPort, P: TerminalPort> CliAdapter<C, T, P> {
         }
     }
 
-    pub fn run(&self) -> Result<ExitStatus, AppError> {
+    pub fn run(&self) -> Result<ExitStatus> {
         let cli = Cli::parse();
         self.handle_command(cli)
     }
 
-    fn handle_command(&self, cli: Cli) -> Result<ExitStatus, AppError> {
+    fn handle_command(&self, cli: Cli) -> Result<ExitStatus> {
         info!("Matching application command");
         match cli.cmd {
             CliSubCmd::TaskRunner { name, interactive } => {

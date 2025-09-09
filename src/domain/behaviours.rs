@@ -1,4 +1,5 @@
 use std::process::ExitStatus;
+use anyhow::{anyhow, Result};
 
 use super::models::{AppError, Direction, Task, TaskConfig, TaskSettings};
 use crate::ports::{TaskExecutionPort, TerminalPort};
@@ -18,7 +19,7 @@ impl<T: TaskExecutionPort, P: TerminalPort> TaskExecutionService<T, P> {
     }
 
     /// Execute a task based on its settings
-    pub fn execute_task(&self, task: Task) -> Result<ExitStatus, AppError> {
+    pub fn execute_task(&self, task: Task) -> Result<ExitStatus> {
         if task.settings.interactive {
             self.execute_interactive_task(task)
         } else {
@@ -27,7 +28,7 @@ impl<T: TaskExecutionPort, P: TerminalPort> TaskExecutionService<T, P> {
     }
 
     /// Execute a task in interactive mode
-    fn execute_interactive_task(&self, task: Task) -> Result<ExitStatus, AppError> {
+    fn execute_interactive_task(&self, task: Task) -> Result<ExitStatus> {
         let pane_id = self.terminal_controller.open_pane(Direction::Right, 30)?;
 
         let args = [&[task.command.program], task.command.args.as_slice()].concat();
@@ -36,7 +37,7 @@ impl<T: TaskExecutionPort, P: TerminalPort> TaskExecutionService<T, P> {
     }
 
     /// Execute a task in non-interactive mode
-    fn execute_non_interactive_task(&self, task: Task) -> Result<ExitStatus, AppError> {
+    fn execute_non_interactive_task(&self, task: Task) -> Result<ExitStatus> {
         let pane_id = self.terminal_controller.open_pane(Direction::Down, 30)?;
         self.terminal_controller.display_logs_in_pane(&pane_id)?;
 
@@ -56,13 +57,10 @@ impl<T: TaskExecutionPort, P: TerminalPort> TaskExecutionService<T, P> {
         task_name: &str,
         config: &TaskConfig,
         interactive: bool,
-    ) -> Result<Task, AppError> {
+    ) -> Result<Task> {
         match config.get(task_name) {
             Some(command) => Ok(Task::new(command.clone(), TaskSettings { interactive })),
-            None => Err(AppError::FeatureNotConfigured(format!(
-                "Task '{}' not configured",
-                task_name
-            ))),
+            None => Err(anyhow!(AppError::FeatureNotConfigured(task_name.to_string()))),
         }
     }
 }

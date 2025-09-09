@@ -1,9 +1,10 @@
 use std::process::ExitStatus;
+use anyhow::Result;
 
-use crate::domain::models::{AppError, Command};
+use crate::domain::models::Command;
 
 /// Port for executing commands
 pub trait TaskExecutionPort {
     /// Execute a command and return its exit status
-    fn execute_command(&self, command: Command) -> Result<ExitStatus, AppError>;
+    fn execute_command(&self, command: Command) -> Result<ExitStatus>;
 }

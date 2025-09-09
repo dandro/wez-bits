@@ -1,4 +1,5 @@
 use std::process::ExitStatus;
+use anyhow::{Context, Result};
 
 use crate::adapters::cli_adapter::CliAdapter;
 use crate::adapters::config_adapter::ConfigAdapter;
@@ -7,12 +8,11 @@ use crate::adapters::task_execution_adapter::TaskExecutionAdapter;
 use crate::adapters::terminal_adapter::TerminalAdapter;
 use crate::constants::{CONFIG_FILE, DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME};
 use crate::domain::behaviours::TaskExecutionService;
-use crate::domain::models::AppError;
 
 pub struct Application;
 
 impl Application {
-    pub fn run() -> Result<ExitStatus, AppError> {
+    pub fn run() -> Result<ExitStatus> {
         // Create adapters
         let file_adapter = FileAdapter::new(
             DOTDIR.to_string(),
@@ -42,7 +42,7 @@ impl Application {
         let cli_adapter = CliAdapter::new(config_adapter, task_execution_service);
 
         // Run application
-        cli_adapter.run()
+        cli_adapter.run().context("Failed to run application")
     }
 }
 

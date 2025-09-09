@@ -1,13 +1,14 @@
-use crate::domain::models::{AppError, TaskConfig};
+use anyhow::Result;
+use crate::domain::models::TaskConfig;
 
 /// Port for configuration management
 pub trait ConfigPort {
     /// Load task configuration
-    fn load_config(&self) -> Result<TaskConfig, AppError>;
+    fn load_config(&self) -> Result<TaskConfig>;
     
     /// Create default configuration
-    fn create_default_config(&self) -> Result<(), AppError>;
+    fn create_default_config(&self) -> Result<()>;
     
     /// View current configuration
-    fn view_config(&self) -> Result<String, AppError>;
+    fn view_config(&self) -> Result<String>;
 }

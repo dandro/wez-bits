@@ -1,9 +1,11 @@
 use std::fs::{create_dir, File};
 use std::io::Write;
 
+use anyhow::{Context, Result};
 use log::info;
 
-use crate::domain::models::{AppError, OutputType};
+use crate::domain::models::OutputType;
+use crate::errors::FileSystemError;
 use crate::ports::FileSystemPort;
 
 pub struct FileAdapter {
@@ -23,30 +25,38 @@ impl FileAdapter {
 }
 
 impl FileSystemPort for FileAdapter {
-    fn create_directory(&self, path: &str) -> Result<(), AppError> {
+    fn create_directory(&self, path: &str) -> Result<()> {
         info!("Creating directory: {}", path);
-        create_dir(path).map_err(|e| AppError::FileOperationError(e.to_string()))
+        create_dir(path).with_context(|| FileSystemError::CreateDirectory(path.to_string()))?;
+        Ok(())
     }
 
-    fn write_to_file(&self, path: &str, content: &str) -> Result<(), AppError> {
+    fn write_to_file(&self, path: &str, content: &str) -> Result<()> {
         info!("Writing to file: {}", path);
-        let mut file = File::create(path).map_err(|e| AppError::FileOperationError(e.to_string()))?;
+        let mut file = File::create(path)
+            .with_context(|| FileSystemError::Write(path.to_string()))?;
+        
         file.write_all(content.as_bytes())
-            .map_err(|e| AppError::FileOperationError(e.to_string()))
+            .with_context(|| FileSystemError::Write(path.to_string()))?;
+        
+        Ok(())
     }
 
-    fn read_from_file(&self, path: &str) -> Result<String, AppError> {
+    fn read_from_file(&self, path: &str) -> Result<String> {
         info!("Reading from file: {}", path);
-        std::fs::read_to_string(path).map_err(|e| AppError::FileOperationError(e.to_string()))
+        std::fs::read_to_string(path)
+            .with_context(|| FileSystemError::Read(path.to_string()))
     }
 
-    fn get_output_file(&self, output_type: OutputType) -> Result<File, AppError> {
+    fn get_output_file(&self, output_type: OutputType) -> Result<File> {
         let name = match output_type {
             OutputType::Stdout => &self.output_filename,
             OutputType::Stderr => &self.error_filename,
         };
         let filename = format!("{}/{}", self.dot_dir, name);
         info!("Creating output file: {}", filename);
-        File::create(filename).map_err(|e| AppError::FileOperationError(e.to_string()))
+        
+        File::create(&filename)
+            .with_context(|| FileSystemError::CreateOutputFile(filename.clone()))
     }
 }

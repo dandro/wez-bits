@@ -2,21 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-/// Application error types
-#[derive(Debug)]
-pub enum AppError {
-    ConfigurationError(String),
-    FeatureNotConfigured(String),
-    CommandExecutionError(String),
-    FileOperationError(String),
-    TerminalOperationError(String),
-}
-
-impl Display for AppError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", &self)
-    }
-}
+// Use the errors defined in the errors module
+pub use crate::errors::DomainError as AppError;
 
 /// Represents a command with program name and arguments
 #[derive(Deserialize, Serialize, Clone, Debug)]

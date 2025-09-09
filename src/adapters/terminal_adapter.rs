@@ -1,8 +1,10 @@
 use std::process::{Command, ExitStatus, Stdio};
 
+use anyhow::{Context, Result};
 use log::info;
 
-use crate::domain::models::{AppError, Direction};
+use crate::domain::models::Direction;
+use crate::errors::TerminalError;
 use crate::ports::TerminalPort;
 
 pub struct TerminalAdapter {
@@ -22,7 +24,7 @@ impl TerminalAdapter {
 }
 
 impl TerminalPort for TerminalAdapter {
-    fn open_pane(&self, direction: Direction, size: i32) -> Result<String, AppError> {
+    fn open_pane(&self, direction: Direction, size: i32) -> Result<String> {
         info!("Get or open wezterm panel: {}", direction.to_string());
         let pane_size = size.to_string();
         let args = match direction {
@@ -32,35 +34,33 @@ impl TerminalPort for TerminalAdapter {
             Direction::Down => vec!["cli", "split-pane", "--percent", &pane_size],
         };
 
-        Command::new("wezterm")
+        let output = Command::new("wezterm")
             .args(args)
             .output()
-            .map_err(|e| AppError::TerminalOperationError(e.to_string()))
-            .and_then(|o| {
-                String::from_utf8(o.stdout)
-                    .map_err(|e| AppError::TerminalOperationError(e.to_string()))
-                    .and_then(|id| {
-                        let pane_id = id.trim();
-                        if pane_id.is_empty() {
-                            Err(AppError::TerminalOperationError(format!(
-                                "There is no pane {direction}"
-                            )))
-                        } else {
-                            Ok(pane_id.to_string())
-                        }
-                    })
-            })
+            .with_context(|| TerminalError::OpenPane("Failed to run wezterm command".to_string()))?;
+            
+        let stdout = String::from_utf8(output.stdout)
+            .with_context(|| TerminalError::OpenPane("Failed to parse wezterm output".to_string()))?;
+            
+        let pane_id = stdout.trim();
+        if pane_id.is_empty() {
+            Err(TerminalError::OpenPane(format!(
+                "There is no pane {direction}"
+            )).into())
+        } else {
+            Ok(pane_id.to_string())
+        }
     }
 
-    fn close_pane(&self, pane_id: &str) -> Result<(), AppError> {
+    fn close_pane(&self, pane_id: &str) -> Result<()> {
         Command::new("wezterm")
             .args(["cli", "kill-pane", "--pane-id", pane_id])
             .output()
-            .map(|_| ())
-            .map_err(|e| AppError::TerminalOperationError(e.to_string()))
+            .with_context(|| TerminalError::ClosePane(format!("Failed to close pane {}", pane_id)))?;
+        Ok(())
     }
 
-    fn display_logs_in_pane(&self, pane_id: &str) -> Result<(), AppError> {
+    fn display_logs_in_pane(&self, pane_id: &str) -> Result<()> {
         info!("Displaying logs in pane with id {}", pane_id);
         let error_file = format!("{}/{}", self.dot_dir, self.error_filename);
         let output_file = format!("{}/{}", self.dot_dir, self.output_filename);
@@ -70,35 +70,33 @@ impl TerminalPort for TerminalAdapter {
             .arg(arg)
             .stdout(Stdio::piped())
             .spawn()
-            .map_err(|e| AppError::TerminalOperationError(e.to_string()))?;
+            .with_context(|| TerminalError::DisplayLogs(format!("Failed to create echo command for pane {}", pane_id)))?;
 
         Command::new("wezterm")
             .args(["cli", "send-text", "--pane-id", pane_id, "--no-paste"])
             .stdin(Stdio::from(echo_cmd.stdout.unwrap()))
             .stdout(Stdio::inherit())
             .spawn()
-            .map(|_| ())
-            .map_err(|e| AppError::TerminalOperationError(e.to_string()))
+            .with_context(|| TerminalError::DisplayLogs(format!("Failed to send text to pane {}", pane_id)))?;
+            
+        Ok(())
     }
 
-    fn pipe_text_to_pane(
-        &self,
-        args: Vec<String>,
-        pane_id: String,
-    ) -> Result<ExitStatus, AppError> {
+    fn pipe_text_to_pane(&self, args: Vec<String>, pane_id: String) -> Result<ExitStatus> {
         let project_task = Command::new("echo")
             .args(args)
             .stdout(Stdio::piped())
             .spawn()
-            .map_err(|e| AppError::TerminalOperationError(e.to_string()))?;
+            .with_context(|| TerminalError::PipeText(format!("Failed to create echo command for pane {}", pane_id)))?;
 
-        Command::new("wezterm")
+        let output = Command::new("wezterm")
             .args(["cli", "send-text", "--pane-id", &pane_id, "--no-paste"])
             .stdin(Stdio::from(project_task.stdout.unwrap()))
             .stdout(Stdio::inherit())
             .spawn()
             .and_then(|c| c.wait_with_output())
-            .map(|output| output.status)
-            .map_err(|e| AppError::TerminalOperationError(e.to_string()))
+            .with_context(|| TerminalError::PipeText(format!("Failed to pipe text to pane {}", pane_id)))?;
+            
+        Ok(output.status)
     }
 }

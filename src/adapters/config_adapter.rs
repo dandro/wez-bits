@@ -1,6 +1,8 @@
+use anyhow::{Context, Result};
 use log::info;
 
-use crate::domain::models::{AppError, TaskConfig};
+use crate::domain::models::TaskConfig;
+use crate::errors::ConfigError;
 use crate::ports::{ConfigPort, FileSystemPort};
 
 const DEFAULT_CONFIG: &str = r#"
@@ -77,35 +79,36 @@ impl<F: FileSystemPort> ConfigAdapter<F> {
 }
 
 impl<F: FileSystemPort> ConfigPort for ConfigAdapter<F> {
-    fn load_config(&self) -> Result<TaskConfig, AppError> {
+    fn load_config(&self) -> Result<TaskConfig> {
         let path = format!("{}/{}", self.dot_dir, self.config_file);
         info!("Load and parse configuration: {}", path);
         
-        self.file_system
-            .read_from_file(&path)
-            .and_then(|config_str| {
-                serde_json::from_str::<TaskConfig>(&config_str)
-                    .map_err(|e| AppError::ConfigurationError(e.to_string()))
-            })
+        let content = self.file_system.read_from_file(&path)?;
+        
+        serde_json::from_str::<TaskConfig>(&content)
+            .with_context(|| ConfigError::Parse(format!("Failed to parse config file: {}", path)))
     }
 
-    fn create_default_config(&self) -> Result<(), AppError> {
+    fn create_default_config(&self) -> Result<()> {
         info!("Creating {} directory", self.dot_dir);
-        self.file_system.create_directory(&self.dot_dir)?;
+        self.file_system.create_directory(&self.dot_dir)
+            .with_context(|| ConfigError::Create(format!("Failed to create directory: {}", self.dot_dir)))?;
 
         let path = format!("{}/{}", self.dot_dir, self.config_file);
         info!("Creating {}", path);
         
         info!("Writing default configuration");
-        self.file_system.write_to_file(&path, DEFAULT_CONFIG)?;
+        self.file_system.write_to_file(&path, DEFAULT_CONFIG)
+            .with_context(|| ConfigError::Create(format!("Failed to write config file: {}", path)))?;
         
         info!("Successfully created config at {}/{}", self.dot_dir, self.config_file);
         Ok(())
     }
 
-    fn view_config(&self) -> Result<String, AppError> {
+    fn view_config(&self) -> Result<String> {
         info!("Viewing config");
-        let config = self.load_config()?;
+        let config = self.load_config()
+            .with_context(|| ConfigError::Load("Failed to load configuration for viewing".to_string()))?;
 
         let output = config
             .iter()
