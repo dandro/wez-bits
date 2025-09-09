@@ -102,8 +102,8 @@ impl From<std::io::Error> for FileSystemError {
     }
 }
 
-impl From<serde_json::Error> for ConfigError {
-    fn from(err: serde_json::Error) -> Self {
+impl From<toml::de::Error> for ConfigError {
+    fn from(err: toml::de::Error) -> Self {
         ConfigError::Parse(err.to_string())
     }
 }

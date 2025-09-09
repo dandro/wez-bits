@@ -14,18 +14,29 @@ Download repository and use cargo to install the tool. `cargo install --path .`
 
 ## Configuration
 
-Create a `.wez-bits/config.json` file in the project you are trying to integrate. The JSON file should follow the structure below:
+Create a `.wez-bits/config.toml` file in the project you are trying to integrate. The TOML file should follow the structure below:
 
-``` jsonc
-{
-  "build": {
-    "program": "npm",
-    "args": ["run", "build"]
-  },
-  "format": {}, // same structure
-  "run": {}, // same structure
-  "test": {} // same structure
-}
+```toml
+# Common tasks
+[build]
+program = "npm"
+args = ["run", "build"]
 
+[format]
+program = ""
+args = []
+
+[run]
+program = ""
+args = []
+
+[test]
+program = ""
+args = []
+
+# You can add any custom tasks you need
+[custom_task]
+program = "your-command"
+args = ["arg1", "arg2"]
 ```
 

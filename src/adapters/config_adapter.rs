@@ -5,61 +5,62 @@ use crate::domain::models::TaskConfig;
 use crate::errors::ConfigError;
 use crate::ports::{ConfigPort, FileSystemPort};
 
-const DEFAULT_CONFIG: &str = r#"
-{
-  "build": {
-    "program": "npm",
-    "args": ["run", "build"]
-  },
-  "format": {
-    "program": "",
-    "args": []
-  },
-  "run": {
-    "program": "",
-    "args": []
-  },
-  "test": {
-    "program": "",
-    "args": []
-  },
-  "check": {
-    "program": "",
-    "args": []
-  },
-  "q": {
-    "program": "",
-    "args": []
-  },
-  "w": {
-    "program": "",
-    "args": []
-  },
-  "e": {
-    "program": "",
-    "args": []
-  },
-  "y": {
-    "program": "",
-    "args": []
-  },
-  "Q": {
-    "program": "",
-    "args": []
-  },
-  "W": {
-    "program": "",
-    "args": []
-  },
-  "E": {
-    "program": "",
-    "args": []
-  },
-  "Y": {
-    "program": "",
-    "args": []
-  }
-}
+const DEFAULT_CONFIG: &str = r#"# WezBits Configuration
+
+# Common tasks
+[build]
+program = "npm"
+args = ["run", "build"]
+
+[format]
+program = ""
+args = []
+
+[run]
+program = ""
+args = []
+
+[test]
+program = ""
+args = []
+
+[check]
+program = ""
+args = []
+
+# Non-interactive registers
+[q]
+program = ""
+args = []
+
+[w]
+program = ""
+args = []
+
+[e]
+program = ""
+args = []
+
+[y]
+program = ""
+args = []
+
+# Interactive registers
+[Q]
+program = ""
+args = []
+
+[W]
+program = ""
+args = []
+
+[E]
+program = ""
+args = []
+
+[Y]
+program = ""
+args = []
 "#;
 
 pub struct ConfigAdapter<F: FileSystemPort> {
@@ -85,8 +86,8 @@ impl<F: FileSystemPort> ConfigPort for ConfigAdapter<F> {
         
         let content = self.file_system.read_from_file(&path)?;
         
-        serde_json::from_str::<TaskConfig>(&content)
-            .with_context(|| ConfigError::Parse(format!("Failed to parse config file: {}", path)))
+        toml::from_str::<TaskConfig>(&content)
+            .with_context(|| ConfigError::Parse(format!("Failed to parse TOML config file: {}", path)))
     }
 
     fn create_default_config(&self) -> Result<()> {
