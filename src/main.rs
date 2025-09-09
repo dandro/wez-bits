@@ -10,9 +10,9 @@ mod wezterm;
 
 fn main() {
     init_timed();
-    info!("Helix Projectile");
+    info!("Wez Bits");
 
     if let Err(err) = run_app() {
-        error!("Helix Projectile Failed: {}", &err.to_string())
+        error!("Wez Bits Failed: {}", &err.to_string())
     }
 }

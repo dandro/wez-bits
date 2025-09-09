@@ -28,7 +28,7 @@ pub struct CommandSettings {
     pub interactive: bool,
 }
 
-pub struct ProjectileTask {
+pub struct AppTask {
     pub cmd: ConfigCommand,
     pub settings: CommandSettings,
 }

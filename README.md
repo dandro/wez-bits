@@ -1,4 +1,4 @@
-# Helix Projectile
+# Wez Bits
 
 CLI tool to load and run project specific integrations.
 
@@ -14,7 +14,7 @@ Download repository and use cargo to install the tool. `cargo install --path .`
 
 ## Configuration
 
-Create a `.helix/projectile.json` file in the project you are trying to integrate. The JSON file should follow the structure below:
+Create a `.wez-bits/config.json` file in the project you are trying to integrate. The JSON file should follow the structure below:
 
 ``` jsonc
 {

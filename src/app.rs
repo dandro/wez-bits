@@ -5,58 +5,28 @@ use std::{
     time::Duration,
 };
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use log::info;
 
 use crate::{
     config::{self, load_tasks_config},
-    constants::{DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME},
-    domain::{AppErr, CommandSettings, ProjectileTask, TasksConfig},
+    constants::{BANNER, DOTDIR, ERROR_FILENAME, OUTPUT_FILENAME},
+    domain::{AppErr, AppTask, CommandSettings, TasksConfig},
     wezterm::{close_pane, display_logs_in_pane, open_pane, pipe_stdout_to_pane, Direction},
 };
 
-#[derive(Clone, ValueEnum, Debug)]
-enum ProjectileIntegration {
-    Build,
-    Format,
-    Run,
-    Test,
-}
-
-/// Helix Projectile - Project Scoped Interactivity
+/// Wez Bits - Project Scoped Interactivity
 #[derive(Parser)]
-#[command(name = "Helix Projectile")]
-#[command(version = "0.6.0-rc21")]
-#[command(about = "
- ██░ ██ ▓█████  ██▓     ██▓▒██   ██▒                                            
-▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒▒▒ █ █ ▒░                                            
-▒██▀▀██░▒███   ▒██░    ▒██▒░░  █   ░                                            
-░▓█ ░██ ▒▓█  ▄ ▒██░    ░██░ ░ █ █ ▒                                             
-░▓█▒░██▓░▒████▒░██████▒░██░▒██▒ ▒██▒                                            
- ▒ ░░▒░▒░░ ▒░ ░░ ▒░▓  ░░▓  ▒▒ ░ ░▓ ░                                            
- ▒ ░▒░ ░ ░ ░  ░░ ░ ▒  ░ ▒ ░░░   ░▒ ░                                            
- ░  ░░ ░   ░     ░ ░    ▒ ░ ░    ░                                              
- ░  ░  ░   ░  ░    ░  ░ ░   ░    ░                                              
-                                                                                
- ██▓███   ██▀███   ▒█████   ▄▄▄██▀▀▀▓█████  ▄████▄  ▄▄▄█████▓ ██▓ ██▓    ▓█████ 
-▓██░  ██▒▓██ ▒ ██▒▒██▒  ██▒   ▒██   ▓█   ▀ ▒██▀ ▀█  ▓  ██▒ ▓▒▓██▒▓██▒    ▓█   ▀ 
-▓██░ ██▓▒▓██ ░▄█ ▒▒██░  ██▒   ░██   ▒███   ▒▓█    ▄ ▒ ▓██░ ▒░▒██▒▒██░    ▒███   
-▒██▄█▓▒ ▒▒██▀▀█▄  ▒██   ██░▓██▄██▓  ▒▓█  ▄ ▒▓▓▄ ▄██▒░ ▓██▓ ░ ░██░▒██░    ▒▓█  ▄ 
-▒██▒ ░  ░░██▓ ▒██▒░ ████▓▒░ ▓███▒   ░▒████▒▒ ▓███▀ ░  ▒██▒ ░ ░██░░██████▒░▒████▒
-▒▓▒░ ░  ░░ ▒▓ ░▒▓░░ ▒░▒░▒░  ▒▓▒▒░   ░░ ▒░ ░░ ░▒ ▒  ░  ▒ ░░   ░▓  ░ ▒░▓  ░░░ ▒░ ░
-░▒ ░       ░▒ ░ ▒░  ░ ▒ ▒░  ▒ ░▒░    ░ ░  ░  ░  ▒       ░     ▒ ░░ ░ ▒  ░ ░ ░  ░
-░░         ░░   ░ ░ ░ ░ ▒   ░ ░ ░      ░   ░          ░       ▒ ░  ░ ░      ░   
-            ░         ░ ░   ░   ░      ░  ░░ ░                ░      ░  ░   ░  ░
-                                           ░                                    
-
-Project Utils for Helix", long_about = None)]
-struct HelixProjectile {
+#[command(name = "Wez Bits")]
+#[command(version = "0.7.0")]
+#[command(about = BANNER, long_about = None)]
+struct App {
     #[command(subcommand)]
-    cmd: ProjectileSubCmd,
+    cmd: AppSubCmd,
 }
 
 #[derive(Debug, Subcommand)]
-enum ProjectileSubCmd {
+enum AppSubCmd {
     /// Run a project scoped task
     TaskRunner {
         /// Task name in config file
@@ -67,7 +37,7 @@ enum ProjectileSubCmd {
         interactive: bool,
     },
 
-    /// Interact with helix projectile configuration
+    /// Interact with wez bits configuration
     Config {
         #[command(subcommand)]
         cmd: ConfigSubCmd,
@@ -95,45 +65,45 @@ fn get_output_file(purpose: FilePurpose) -> Result<File, AppErr> {
     File::create(filename).map_err(|e| AppErr::OutputFile(e.to_string()))
 }
 
-fn exec(projectile_cmd: ProjectileTask) -> Result<ExitStatus, AppErr> {
-    let exit_status = if projectile_cmd.settings.interactive {
-        interactive_cmd(projectile_cmd)?
+fn exec(wez_bits_cmd: AppTask) -> Result<ExitStatus, AppErr> {
+    let exit_status = if wez_bits_cmd.settings.interactive {
+        interactive_cmd(wez_bits_cmd)?
     } else {
-        non_interactive_cmd(projectile_cmd)?
+        non_interactive_cmd(wez_bits_cmd)?
     };
 
     Ok(exit_status)
 }
 
-fn interactive_cmd(projectile_cmd: ProjectileTask) -> Result<ExitStatus, AppErr> {
+fn interactive_cmd(wez_bits_cmd: AppTask) -> Result<ExitStatus, AppErr> {
     info!(
         "Executing interactive command: {} {:?}",
-        projectile_cmd.cmd.program, projectile_cmd.cmd.args
+        wez_bits_cmd.cmd.program, wez_bits_cmd.cmd.args
     );
 
     let pane_id = open_pane(Direction::Right, 30)?;
 
     pipe_stdout_to_pane(
         [
-            &[projectile_cmd.cmd.program],
-            projectile_cmd.cmd.args.as_slice(),
+            &[wez_bits_cmd.cmd.program],
+            wez_bits_cmd.cmd.args.as_slice(),
         ]
         .concat(),
         pane_id,
     )
 }
 
-fn non_interactive_cmd(projectile_cmd: ProjectileTask) -> Result<ExitStatus, AppErr> {
+fn non_interactive_cmd(wez_bits_cmd: AppTask) -> Result<ExitStatus, AppErr> {
     let output = get_output_file(FilePurpose::Stdout)?;
     let error = get_output_file(FilePurpose::Stderr)?;
     let mini_buffer_id = open_pane(Direction::Down, 30)?;
     display_logs_in_pane(&mini_buffer_id)?;
     info!(
         "Executing command: {} {:?}",
-        projectile_cmd.cmd.program, projectile_cmd.cmd.args
+        wez_bits_cmd.cmd.program, wez_bits_cmd.cmd.args
     );
-    let exit_status = Command::new(projectile_cmd.cmd.program)
-        .args(projectile_cmd.cmd.args)
+    let exit_status = Command::new(wez_bits_cmd.cmd.program)
+        .args(wez_bits_cmd.cmd.args)
         .stderr(error)
         .stdout(output)
         .spawn()
@@ -148,17 +118,17 @@ fn non_interactive_cmd(projectile_cmd: ProjectileTask) -> Result<ExitStatus, App
     Ok(exit_status)
 }
 
-fn handle_command(helix_projectile: HelixProjectile) -> Result<ExitStatus, AppErr> {
-    info!("Matching projectile command");
-    match helix_projectile.cmd {
-        ProjectileSubCmd::TaskRunner { name, interactive } => {
+fn handle_command(wez_bits: App) -> Result<ExitStatus, AppErr> {
+    info!("Matching application command");
+    match wez_bits.cmd {
+        AppSubCmd::TaskRunner { name, interactive } => {
             info!("Command: TaskRunner");
             info!("Find command ({:?}) in config file", name);
             let tasks_config = load_tasks_config()?;
             let cmd = handle_task_runner(name, interactive, tasks_config)?;
             exec(cmd)
         }
-        ProjectileSubCmd::Config { cmd } => {
+        AppSubCmd::Config { cmd } => {
             info!("Command: Config");
             match cmd {
                 ConfigSubCmd::Create {} => {
@@ -178,9 +148,9 @@ fn handle_task_runner(
     name: String,
     interactive: bool,
     tasks_config: TasksConfig,
-) -> Result<ProjectileTask, AppErr> {
+) -> Result<AppTask, AppErr> {
     match tasks_config.get(&name) {
-        Some(cmd) => Ok(ProjectileTask {
+        Some(cmd) => Ok(AppTask {
             cmd: cmd.clone(),
             settings: CommandSettings { interactive },
         }),
@@ -192,6 +162,6 @@ fn handle_task_runner(
 }
 
 pub fn run_app() -> Result<ExitStatus, AppErr> {
-    let helix_projectile = HelixProjectile::parse();
-    handle_command(helix_projectile)
+    let app = App::parse();
+    handle_command(app)
 }
