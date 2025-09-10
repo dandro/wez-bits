@@ -1,7 +1,7 @@
-use std::process::ExitStatus;
 use anyhow::{anyhow, Result};
+use std::process::ExitStatus;
 
-use super::models::{AppError, Direction, Task, TaskConfig, TaskSettings};
+use super::models::{Direction, DomainError, Task, TaskConfig, TaskSettings};
 use crate::ports::{TaskExecutionPort, TerminalPort};
 
 /// The core application service for task execution
@@ -60,7 +60,9 @@ impl<T: TaskExecutionPort, P: TerminalPort> TaskExecutionService<T, P> {
     ) -> Result<Task> {
         match config.get(task_name) {
             Some(command) => Ok(Task::new(command.clone(), TaskSettings { interactive })),
-            None => Err(anyhow!(AppError::FeatureNotConfigured(task_name.to_string()))),
+            None => Err(anyhow!(DomainError::FeatureNotConfigured(
+                task_name.to_string()
+            ))),
         }
     }
 }

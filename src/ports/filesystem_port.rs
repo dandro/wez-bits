@@ -2,6 +2,7 @@ use anyhow::Result;
 use crate::domain::models::OutputType;
 
 /// Port for file system operations
+#[cfg_attr(test, mockall::automock)]
 pub trait FileSystemPort {
     /// Create a directory
     fn create_directory(&self, path: &str) -> Result<()>;
