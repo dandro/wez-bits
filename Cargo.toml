@@ -16,3 +16,8 @@ toml = "0.9.5"
 [dev-dependencies]
 mockall = "0.12.1"
 tempfile = "3.9.0"
+
+[[bin]]
+name = "wzb"
+path = "./src/main.rs"
+
