@@ -27,7 +27,7 @@ args = []
 program = ""
 args = []
 
-# Non-interactive registers
+# Interactive registers
 [q]
 program = ""
 args = []
@@ -44,7 +44,7 @@ args = []
 program = ""
 args = []
 
-# Interactive registers
+# Non-interactive registers
 [Q]
 program = ""
 args = []

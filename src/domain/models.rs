@@ -12,9 +12,6 @@ pub enum DomainError {
     #[error("Task '{0}' not configured")]
     FeatureNotConfigured(String),
 
-    #[error("Command execution failed: {0}")]
-    CommandExecution(String),
-
     #[error("File operation failed: {0}")]
     FileOperation(String),
 
@@ -33,9 +30,6 @@ pub enum FileSystemError {
 
     #[error("Failed to create directory: {0}")]
     CreateDirectory(String),
-
-    #[error("Failed to create output file: {0}")]
-    CreateOutputFile(String),
 }
 
 /// Configuration related errors
@@ -60,18 +54,8 @@ pub enum TerminalError {
     #[error("Failed to close pane: {0}")]
     ClosePane(String),
 
-    #[error("Failed to display logs: {0}")]
-    DisplayLogs(String),
-
     #[error("Failed to pipe text to pane: {0}")]
     PipeText(String),
-}
-
-/// Task execution errors
-#[derive(Error, Debug)]
-pub enum TaskExecutionError {
-    #[error("Failed to execute command: {0}")]
-    Execute(String),
 }
 
 // From implementations for error conversions
@@ -93,12 +77,6 @@ impl From<TerminalError> for DomainError {
     }
 }
 
-impl From<TaskExecutionError> for DomainError {
-    fn from(err: TaskExecutionError) -> Self {
-        DomainError::CommandExecution(err.to_string())
-    }
-}
-
 impl From<std::io::Error> for FileSystemError {
     fn from(err: std::io::Error) -> Self {
         FileSystemError::Read(err.to_string())
@@ -111,20 +89,18 @@ impl From<toml::de::Error> for ConfigError {
     }
 }
 
-/// Represents a command with program name and arguments
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Command {
     pub program: String,
     pub args: Vec<String>,
 }
 
-/// Settings for task execution
 #[derive(Debug, Clone)]
 pub struct TaskSettings {
-    pub interactive: bool,
+    pub close: TaskClose,
+    pub direction: Direction,
 }
 
-/// A task to be executed
 #[derive(Debug, Clone)]
 pub struct Task {
     pub command: Command,
@@ -137,10 +113,8 @@ impl Task {
     }
 }
 
-/// Collection of commands mapped by name
 pub type TaskConfig = HashMap<String, Command>;
 
-/// Direction for splitting panes
 #[derive(Debug, Clone, Copy)]
 pub enum Direction {
     Right,
@@ -156,9 +130,9 @@ impl Display for Direction {
     }
 }
 
-/// Types of files for task output
-#[derive(Debug, PartialEq)]
-pub enum OutputType {
-    Stdout,
-    Stderr,
+#[derive(Debug, Clone)]
+pub enum TaskClose {
+    Always,
+    OnSuccess,
+    Never,
 }
