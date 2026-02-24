@@ -20,25 +20,17 @@ impl<P: TerminalPort> TaskExecutionService<P> {
         let pane_id = self
             .terminal_controller
             .open_pane(task.settings.direction, 30)?;
-        let result = self.execute_interactive_task(&pane_id, &task);
-
-        match task.settings.close {
-            TaskClose::Always | TaskClose::OnSuccess if result.is_ok() => {
-                self.terminal_controller.close_pane(&pane_id)?
-            }
-            _ => (),
-        };
-
-        result
+        self.execute_interactive_task(&pane_id, task)
     }
 
-    fn execute_interactive_task(&self, pane_id: &str, task: &Task) -> Result<ExitStatus> {
+    fn execute_interactive_task(&self, pane_id: &str, task: Task) -> Result<ExitStatus> {
         let args = [
             slice::from_ref(&task.command.program),
             task.command.args.as_slice(),
         ]
         .concat();
-        self.terminal_controller.pipe_text_to_pane(args, pane_id)
+        self.terminal_controller
+            .pipe_text_to_pane(args, pane_id, task.settings.close)
     }
 
     pub fn find_task(

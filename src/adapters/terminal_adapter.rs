@@ -3,7 +3,7 @@ use std::process::{Command, ExitStatus, Stdio};
 use anyhow::{Context, Result};
 use log::info;
 
-use crate::domain::models::{Direction, TerminalError};
+use crate::domain::models::{Direction, TaskClose, TerminalError};
 use crate::ports::TerminalPort;
 
 pub struct TerminalAdapter {}
@@ -54,9 +54,25 @@ impl TerminalPort for TerminalAdapter {
         Ok(())
     }
 
-    fn pipe_text_to_pane(&self, args: Vec<String>, pane_id: &str) -> Result<ExitStatus> {
+    fn pipe_text_to_pane(
+        &self,
+        args: Vec<String>,
+        pane_id: &str,
+        close: TaskClose,
+    ) -> Result<ExitStatus> {
+        let base_cmd = args.join(" ");
+        let full_cmd = match close {
+            TaskClose::Never => base_cmd,
+            TaskClose::OnSuccess => {
+                format!("{base_cmd}; if ($env.LAST_EXIT_CODE == 0) {{ wezterm cli kill-pane }}")
+            }
+            TaskClose::Always => format!("{base_cmd}; wezterm cli kill-pane"),
+        };
+
+        info!("Executing task {full_cmd}");
+
         let project_task = Command::new("echo")
-            .args(args)
+            .arg(&full_cmd)
             .stdout(Stdio::piped())
             .spawn()
             .with_context(|| {
@@ -66,16 +82,23 @@ impl TerminalPort for TerminalAdapter {
                 ))
             })?;
 
+        let stdout = project_task
+            .stdout
+            .expect("Could not get project task STDOUT");
+
         let output = Command::new("wezterm")
             .args(["cli", "send-text", "--pane-id", pane_id, "--no-paste"])
-            .stdin(Stdio::from(project_task.stdout.unwrap()))
-            .stdout(Stdio::inherit())
+            .stdin(Stdio::from(stdout))
             .spawn()
             .and_then(|c| c.wait_with_output())
             .with_context(|| {
                 TerminalError::PipeText(format!("Failed to pipe text to pane {}", pane_id))
             })?;
 
-        Ok(output.status)
+        let exit_code = output.status;
+
+        info!("Command exited with code {exit_code}");
+
+        Ok(exit_code)
     }
 }

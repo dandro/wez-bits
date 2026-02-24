@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::process::ExitStatus;
 
-use crate::domain::models::Direction;
+use crate::domain::models::{Direction, TaskClose};
 
 /// Port for terminal operations
 #[cfg_attr(test, mockall::automock)]
@@ -13,5 +13,5 @@ pub trait TerminalPort {
     fn close_pane(&self, pane_id: &str) -> Result<()>;
 
     /// Pipe text to a pane
-    fn pipe_text_to_pane(&self, args: Vec<String>, pane_id: &str) -> Result<ExitStatus>;
+    fn pipe_text_to_pane(&self, args: Vec<String>, pane_id: &str, close: TaskClose) -> Result<ExitStatus>;
 }

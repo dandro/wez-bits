@@ -12,7 +12,7 @@ use crate::ports::{ConfigPort, TerminalPort};
 /// Application CLI command structure
 #[derive(Parser)]
 #[command(name = "Wez Bits")]
-#[command(version = "0.8.0")]
+#[command(version = "0.8.1")]
 #[command(about = crate::constants::BANNER, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -187,7 +187,7 @@ mod tests {
 
         mock_terminal
             .expect_pipe_text_to_pane()
-            .returning(|_, _| Ok(ExitStatus::from_raw(0)));
+            .returning(|_, _, _| Ok(ExitStatus::from_raw(0)));
 
         mock_terminal
     }
@@ -286,9 +286,9 @@ mod tests {
             .returning(|_, _| Ok("test-pane-id".to_string()));
 
         mock_terminal
-            .expect_close_pane()
+            .expect_pipe_text_to_pane()
             .times(1)
-            .returning(|_| Ok(()));
+            .returning(|_, _, _| Ok(ExitStatus::from_raw(0)));
 
         let task_service = TaskExecutionService::new(mock_terminal);
         let adapter = CliAdapter::new(mock_config, task_service);
