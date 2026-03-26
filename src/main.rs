@@ -10,19 +10,22 @@ mod ports;
 
 use application::Application;
 
+use crate::constants::DOTDIR;
+
 fn init_logger() {
     let log_file = std::env::var("WZB_LOG_FILE")
-        .unwrap_or_else(|_| "/tmp/wez-bits.log".to_string());
+        .unwrap_or_else(|_| format!("{}/wez-bits.log", DOTDIR).to_string());
 
-    let formatter = |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record| {
-        out.finish(format_args!(
-            "{} {} {} - {}",
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-            record.level(),
-            record.target(),
-            message
-        ))
-    };
+    let formatter =
+        |out: fern::FormatCallback, message: &std::fmt::Arguments, record: &log::Record| {
+            out.finish(format_args!(
+                "{} {} {} - {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                record.target(),
+                message
+            ))
+        };
 
     fern::Dispatch::new()
         .chain(
