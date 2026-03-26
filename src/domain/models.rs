@@ -17,6 +17,9 @@ pub enum DomainError {
 
     #[error("Terminal operation failed: {0}")]
     TerminalOperation(String),
+
+    #[error("Task execution failed: {0}")]
+    TaskExecution(String),
 }
 
 /// File system related errors
@@ -51,11 +54,15 @@ pub enum TerminalError {
     #[error("Failed to open pane: {0}")]
     OpenPane(String),
 
-    #[error("Failed to close pane: {0}")]
-    ClosePane(String),
-
     #[error("Failed to pipe text to pane: {0}")]
     PipeText(String),
+}
+
+/// Task execution errors
+#[derive(Error, Debug)]
+pub enum TaskExecutionError {
+    #[error("Failed to find param value: {0}")]
+    TaskParamInjection(String),
 }
 
 // From implementations for error conversions
@@ -74,6 +81,12 @@ impl From<ConfigError> for DomainError {
 impl From<TerminalError> for DomainError {
     fn from(err: TerminalError) -> Self {
         DomainError::TerminalOperation(err.to_string())
+    }
+}
+
+impl From<TaskExecutionError> for DomainError {
+    fn from(err: TaskExecutionError) -> Self {
+        DomainError::TaskExecution(err.to_string())
     }
 }
 
@@ -136,4 +149,3 @@ pub enum TaskClose {
     OnSuccess,
     Never,
 }
-

@@ -44,16 +44,6 @@ impl TerminalPort for TerminalAdapter {
         }
     }
 
-    fn close_pane(&self, pane_id: &str) -> Result<()> {
-        Command::new("wezterm")
-            .args(["cli", "kill-pane", "--pane-id", pane_id])
-            .output()
-            .with_context(|| {
-                TerminalError::ClosePane(format!("Failed to close pane {}", pane_id))
-            })?;
-        Ok(())
-    }
-
     fn pipe_text_to_pane(
         &self,
         args: Vec<String>,

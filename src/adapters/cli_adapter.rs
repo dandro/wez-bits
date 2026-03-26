@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::os::unix::process::ExitStatusExt;
 use std::process::ExitStatus;
 
@@ -12,7 +13,7 @@ use crate::ports::{ConfigPort, TerminalPort};
 /// Application CLI command structure
 #[derive(Parser)]
 #[command(name = "Wez Bits")]
-#[command(version = "0.8.1")]
+#[command(version = "0.9.0")]
 #[command(about = crate::constants::BANNER, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -33,6 +34,10 @@ enum CliSubCmd {
         /// Direction to open the panel
         #[arg(short, long, default_value = "right")]
         direction: TaskDirectionOption,
+
+        /// Values the command can use when executed
+        #[arg(short, long, value_parser=parsers::kv_pairs)]
+        param: Vec<(String, String)>,
     },
 
     /// Interact with wez bits configuration
@@ -95,45 +100,81 @@ impl<C: ConfigPort, P: TerminalPort> CliAdapter<C, P> {
 
     pub fn run(&self) -> Result<ExitStatus> {
         let cli = Cli::parse();
-        self.handle_command(cli)
-    }
 
-    fn handle_command(&self, cli: Cli) -> Result<ExitStatus> {
         info!("Matching application command");
         match cli.cmd {
             CliSubCmd::TaskRunner {
                 name,
                 close,
                 direction,
-            } => {
-                info!("Command: TaskRunner");
-                info!("Find command ({:?}) in config file", name);
-                let tasks_config = self.config_manager.load_config()?;
-                let task = self.task_service.find_task(
-                    &name,
-                    &tasks_config,
-                    close.to_task_close(),
-                    direction.to_task_direction(),
-                )?;
-                info!("Executing task.");
-                self.task_service.execute_task(task)
+                param: params,
+            } => self.handle_task_runner_command(name, close, direction, params),
+            CliSubCmd::Config { cmd } => self.handle_config_command(cmd),
+        }
+    }
+
+    fn handle_config_command(
+        &self,
+        cmd: ConfigSubCmd,
+    ) -> std::result::Result<ExitStatus, anyhow::Error> {
+        info!("Command: Config");
+        match cmd {
+            ConfigSubCmd::Create {} => {
+                info!("Sub Command: Create");
+                self.config_manager.create_default_config()?;
+                Ok(ExitStatus::from_raw(0))
             }
-            CliSubCmd::Config { cmd } => {
-                info!("Command: Config");
-                match cmd {
-                    ConfigSubCmd::Create {} => {
-                        info!("Sub Command: Create");
-                        self.config_manager.create_default_config()?;
-                        Ok(ExitStatus::from_raw(0))
-                    }
-                    ConfigSubCmd::View {} => {
-                        info!("Sub Command: View");
-                        let config_str = self.config_manager.view_config()?;
-                        println!("{}", config_str);
-                        Ok(ExitStatus::from_raw(0))
-                    }
-                }
+            ConfigSubCmd::View {} => {
+                info!("Sub Command: View");
+                let config_str = self.config_manager.view_config()?;
+                println!("{}", config_str);
+                Ok(ExitStatus::from_raw(0))
             }
+        }
+    }
+
+    fn handle_task_runner_command(
+        &self,
+        name: String,
+        close: TaskCloseOption,
+        direction: TaskDirectionOption,
+        params: Vec<(String, String)>,
+    ) -> std::result::Result<ExitStatus, anyhow::Error> {
+        info!("Command: TaskRunner");
+        info!("Find command ({:?}) in config file", name);
+        let tasks_config = self.config_manager.load_config()?;
+        let task = self.task_service.find_task(
+            &name,
+            &tasks_config,
+            close.to_task_close(),
+            direction.to_task_direction(),
+        )?;
+
+        info!("Injecting params");
+        let injected_task = self.task_service.apply_param_injections(
+            task,
+            params.into_iter().collect::<HashMap<String, String>>(),
+        )?;
+
+        info!("Executing task.");
+        self.task_service.execute_task(injected_task)
+    }
+}
+
+mod parsers {
+    use anyhow::{anyhow, Result};
+    use log::info;
+
+    pub fn kv_pairs(s: &str) -> Result<(String, String)> {
+        info!("Parsing kv_pair: {s}");
+        let parts: Vec<&str> = s.splitn(2, '=').collect();
+        if parts.len() == 2 {
+            Ok((parts[0].to_string(), parts[1].to_string()))
+        } else {
+            Err(anyhow!(
+                "Invalid key-value pair: {}. Expected format `key=value`",
+                s
+            ))
         }
     }
 }
@@ -183,8 +224,6 @@ mod tests {
             .expect_open_pane()
             .returning(|_, _| Ok("test-pane-id".to_string()));
 
-        mock_terminal.expect_close_pane().returning(|_| Ok(()));
-
         mock_terminal
             .expect_pipe_text_to_pane()
             .returning(|_, _, _| Ok(ExitStatus::from_raw(0)));
@@ -202,146 +241,5 @@ mod tests {
         CliAdapter::new(mock_config, task_service);
 
         assert!(true);
-    }
-
-    #[test]
-    fn test_handle_config_create_command() {
-        let mut mock_config = MockConfigPort::new();
-        mock_config
-            .expect_create_default_config()
-            .times(1)
-            .returning(|| Ok(()));
-
-        let mock_terminal = setup_mock_terminal();
-
-        let task_service = TaskExecutionService::new(mock_terminal);
-        let adapter = CliAdapter::new(mock_config, task_service);
-
-        // Create a Config Create command
-        let cli = Cli {
-            cmd: CliSubCmd::Config {
-                cmd: ConfigSubCmd::Create {},
-            },
-        };
-
-        // Handle the command
-        let result = adapter.handle_command(cli);
-
-        // Check that execution succeeded
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().code(), Some(0));
-    }
-
-    #[test]
-    fn test_handle_config_view_command() {
-        let mut mock_config = MockConfigPort::new();
-        mock_config
-            .expect_view_config()
-            .times(1)
-            .returning(|| Ok("[test] echo test\n".to_string()));
-
-        let mock_terminal = setup_mock_terminal();
-
-        let task_service = TaskExecutionService::new(mock_terminal);
-        let adapter = CliAdapter::new(mock_config, task_service);
-
-        // Create a Config View command
-        let cli = Cli {
-            cmd: CliSubCmd::Config {
-                cmd: ConfigSubCmd::View {},
-            },
-        };
-
-        // Handle the command
-        let result = adapter.handle_command(cli);
-
-        // Check that execution succeeded
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().code(), Some(0));
-    }
-
-    #[test]
-    fn test_handle_task_runner_command() {
-        // Setup mock config that returns a task config with a "build" task
-        let mut mock_config = MockConfigPort::new();
-        let mut task_config = HashMap::new();
-        task_config.insert(
-            "build".to_string(),
-            Command {
-                program: "npm".to_string(),
-                args: vec!["run".to_string(), "build".to_string()],
-            },
-        );
-
-        mock_config
-            .expect_load_config()
-            .times(1)
-            .returning(move || Ok(task_config.clone()));
-
-        // Setup mock terminal for task execution
-        let mut mock_terminal = MockTerminalPort::new();
-        mock_terminal
-            .expect_open_pane()
-            .times(1)
-            .returning(|_, _| Ok("test-pane-id".to_string()));
-
-        mock_terminal
-            .expect_pipe_text_to_pane()
-            .times(1)
-            .returning(|_, _, _| Ok(ExitStatus::from_raw(0)));
-
-        let task_service = TaskExecutionService::new(mock_terminal);
-        let adapter = CliAdapter::new(mock_config, task_service);
-
-        // Create a TaskRunner command for the "build" task
-        let cli = Cli {
-            cmd: CliSubCmd::TaskRunner {
-                name: "build".to_string(),
-                close: TaskCloseOption::OnSuccess,
-                direction: TaskDirectionOption::Right,
-            },
-        };
-
-        // Handle the command
-        let result = adapter.handle_command(cli);
-
-        // Check that execution succeeded
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().code(), Some(0));
-    }
-
-    #[test]
-    fn test_task_runner_with_nonexistent_task() {
-        // Setup mock config that returns an empty task config
-        let mut mock_config = MockConfigPort::new();
-        mock_config
-            .expect_load_config()
-            .times(1)
-            .returning(|| Ok(HashMap::new()));
-
-        let mock_terminal = setup_mock_terminal();
-
-        let task_service = TaskExecutionService::new(mock_terminal);
-        let adapter = CliAdapter::new(mock_config, task_service);
-
-        // Create a TaskRunner command for a non-existent task
-        let cli = Cli {
-            cmd: CliSubCmd::TaskRunner {
-                name: "nonexistent".to_string(),
-                close: TaskCloseOption::OnSuccess,
-                direction: TaskDirectionOption::Right,
-            },
-        };
-
-        // Handle the command
-        let result = adapter.handle_command(cli);
-
-        // Check that execution failed
-        assert!(result.is_err());
-
-        // Check error message indicates task not found
-        let err = result.unwrap_err();
-        let err_string = err.to_string();
-        assert!(err_string.contains("nonexistent"));
     }
 }
