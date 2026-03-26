@@ -13,7 +13,7 @@ use crate::ports::{ConfigPort, TerminalPort};
 /// Application CLI command structure
 #[derive(Parser)]
 #[command(name = "Wez Bits")]
-#[command(version = "0.9.0")]
+#[command(version = "0.10.0")]
 #[command(about = crate::constants::BANNER, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]

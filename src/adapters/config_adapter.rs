@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use log::info;
 
+use crate::constants::BANNER;
 use crate::domain::models::{ConfigError, TaskConfig};
 use crate::ports::{ConfigPort, FileSystemPort};
 
@@ -123,10 +124,17 @@ impl<F: FileSystemPort> ConfigPort for ConfigAdapter<F> {
 
         let output = config
             .iter()
-            .map(|(key, value)| format!("[{}] {} {}\n", key, value.program, value.args.join(" ")))
+            .map(|(key, value)| {
+                format!(
+                    "{:>8} {} {}\n",
+                    format!("[{}]", key),
+                    value.program,
+                    value.args.join(" ")
+                )
+            })
             .collect::<String>();
 
-        Ok(output)
+        Ok(format!("{}\n{}", BANNER, output))
     }
 }
 
