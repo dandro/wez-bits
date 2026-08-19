@@ -15,11 +15,11 @@ impl TerminalAdapter {
 
     fn try_existing_pane(&self, direction: Direction) -> Result<String> {
         Command::new("wezterm")
-            .args(&["cli", "get-pane-direction", &direction.to_string()])
+            .args(["cli", "get-pane-direction", &direction.to_string()])
             .output()
             .map_err(|e| anyhow!(e.to_string()))
             .and_then(|output| {
-                if output.stdout.len() > 0 {
+                if !output.stdout.is_empty() {
                     String::from_utf8(output.stdout).map_err(|e| anyhow!(e.to_string()))
                 } else {
                     Err(anyhow!("No output"))

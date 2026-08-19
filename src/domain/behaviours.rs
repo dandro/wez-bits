@@ -60,7 +60,7 @@ impl<P: TerminalPort> TaskExecutionService<P> {
         info!("Getting injected param for key {key}");
         match injected_params.get(key).and_then(|v| {
             let cleaned_value = v.trim();
-            if cleaned_value.len() == 0 {
+            if cleaned_value.is_empty() {
                 None
             } else {
                 Some(cleaned_value)

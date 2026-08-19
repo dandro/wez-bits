@@ -1,4 +1,4 @@
-use std::fs::{create_dir, File};
+use std::fs::{create_dir, exists, File};
 use std::io::Write;
 
 use anyhow::{Context, Result};
@@ -18,8 +18,13 @@ impl FileAdapter {
 
 impl FileSystemPort for FileAdapter {
     fn create_directory(&self, path: &str) -> Result<()> {
-        info!("Creating directory: {}", path);
-        create_dir(path).with_context(|| FileSystemError::CreateDirectory(path.to_string()))?;
+        let exists = exists(path)?;
+        if exists {
+            info!("Path {} already exists", path);
+        } else {
+            info!("Creating directory: {}", path);
+            create_dir(path).with_context(|| FileSystemError::CreateDirectory(path.to_string()))?;
+        }
         Ok(())
     }
 
