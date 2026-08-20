@@ -56,7 +56,7 @@ impl TerminalAdapter {
 
 impl TerminalPort for TerminalAdapter {
     fn open_pane(&self, direction: Direction, size: i32) -> Result<String> {
-        info!("Open wezterm panel: {}", direction.to_string());
+        info!("Open wezterm panel: {}", direction);
         let pane_size = size.to_string();
         let args = match direction {
             Direction::Right => {
